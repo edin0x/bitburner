@@ -6,12 +6,16 @@ export async function main(ns) {
 	ns.disableLog('relaysmtp')
 	ns.disableLog('relaysmtp')
 	ns.disableLog('sqlinject')
-	ns.disableLog('getServerNumPortsRequired')
 	ns.disableLog('scp')
 	ns.disableLog('nuke')
-	ns.disableLog('getServerMaxRam')
 	ns.disableLog('scan')
+	ns.disableLog('exec')
+	ns.disableLog('getServerMaxRam')
+	ns.disableLog('getServerNumPortsRequired')
+	ns.disableLog('getServerUsedRam')
+
 	const hackScriptFileName = 'hack.js'
+	const minimumFreeRamOnHomeServer = 20 // in GB
 
 	const openPortPrograms = {
 		'BruteSSH.exe': ns.brutessh,
@@ -54,24 +58,41 @@ export async function main(ns) {
 		nuke(node)
 	}
 
-	const h4ck = async (node) => {
+	const runHackScript = async (node) => {
 		killHackScript(node)
+		if (node !== 'home') await ns.scp(hackScriptFileName, node)
+		const maxNumOfThreads = getMaxNumberOfThreads(node, hackScriptFileName)
+
+		if (maxNumOfThreads > 0) ns.exec(hackScriptFileName, node, maxNumOfThreads)
+	}
+
+	const h4ck = async (node) => {
 		r00t(node)
 
-		// install latest version of script
-		if (ns.hasRootAccess(node) && node !== 'home') {
-			await ns.scp(hackScriptFileName, node)
-			const maxNumOfThreads = getMaxNumberOfThreads(node, hackScriptFileName)
-			if (maxNumOfThreads > 0) {
-				ns.exec(hackScriptFileName, node, maxNumOfThreads)
-			}
-		}
+		if (ns.hasRootAccess(node) && node !== 'home') await runHackScript(node)
 	}
 
 	const propagate = async (network) => {
 		for (const node of network) {
 			await h4ck(node)
 		}
+	}
+
+	const runOnPurchasedServers = async () => {
+		const purchasedServers = ns.getPurchasedServers()
+		for (const node of purchasedServers) {
+			await runHackScript(node)
+		}
+	}
+
+	const runOnHomeServer = async () => {
+		
+		const scriptRam = ns.getScriptRam(hackScriptFileName)
+		const threadsToKeepFree = (minimumFreeRamOnHomeServer + ns.getServerUsedRam('home')) / scriptRam
+		const maxNumberOfThreads = getMaxNumberOfThreads('home', hackScriptFileName) - threadsToKeepFree
+		 
+		// TODO: determine optimal target to hack
+		if (maxNumberOfThreads > 0) ns.exec(hackScriptFileName, 'home', maxNumberOfThreads, 'foodnstuff')
 	}
 
 	const getRootedNodes = (network) => network.filter(node => ns.hasRootAccess(node))
@@ -81,6 +102,9 @@ export async function main(ns) {
 	ns.print(`[inf0] found ${network.length} total nodes in network.`)
 
 	await propagate(network)
+
+	await runOnPurchasedServers()
+	await runOnHomeServer()
 
 	const initiallyRootedNodes = getRootedNodes(network)
 	const initiallyNotRootedNodes = getNotRootedNodes(network)

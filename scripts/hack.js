@@ -6,7 +6,7 @@ export async function main(ns) {
     ns.disableLog('getHackingLevel')
     ns.disableLog('getServerMoneyAvailable')
 
-    const target = ns.args.length > 0 ? ns.args[0] : await ns.getHostname()
+    const target = ns.args.length > 0 ? ns.args[0] : ns.getHostname()
     const startScriptMessage = `starting h4ck on target "${target}"..`
     ns.print(startScriptMessage)
 
